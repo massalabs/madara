@@ -14,8 +14,9 @@ use mp_simulations::SimulationFlags;
 use pallet_starknet_runtime_api::{ConvertTransactionRuntimeApi, StarknetRuntimeApi};
 use sc_client_api::backend::Backend;
 use sc_transaction_pool::ChainApi;
-use sp_api::{ApiError, ProvideRuntimeApi};
+use sp_api::{ApiError, Decode, Encode, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
+use sp_runtime::OpaqueExtrinsic;
 use sp_runtime::traits::Block as BlockT;
 use starknet_api::core::{ContractAddress, EntryPointSelector};
 use starknet_api::transaction::{Calldata, Event, TransactionHash};
@@ -55,6 +56,8 @@ where
         block_hash: B::Hash,
         message: L1HandlerTransaction,
     ) -> RpcApiResult<FeeEstimate> {
+        
+        println!("[do estimate message fee] {} {}", file!(), line!());
         Ok((&self.client.runtime_api().estimate_message_fee(block_hash, message).map_err(|e| {
             error!("Runtime Api error: {e}");
             StarknetRpcApiError::InternalServerError
@@ -95,8 +98,12 @@ where
         best_block_hash: <B as BlockT>::Hash,
         transaction: AccountTransaction,
     ) -> RpcApiResult<B::Extrinsic> {
-        self.client.runtime_api().convert_account_transaction(best_block_hash, transaction).map_err(|e| {
+        let oex = self.client.runtime_api().convert_account_transaction(best_block_hash, transaction).map_err(|e| {
             error!("Failed to convert transaction: {:?}", e);
+            StarknetRpcApiError::InternalServerError
+        })?;
+        
+        B::Extrinsic::decode(&mut oex.encode().as_slice()).map_err(|_e| {
             StarknetRpcApiError::InternalServerError
         })
     }
@@ -136,7 +143,17 @@ where
         block_hash: B::Hash,
         extrinsics: Vec<B::Extrinsic>,
     ) -> RpcApiResult<Vec<Transaction>> {
-        self.client.runtime_api().extrinsic_filter(block_hash, extrinsics).map_err(|e| {
+        
+        let rt = self.client.runtime_api();
+        let extrinsics = extrinsics
+            .into_iter()
+            .filter_map(|ex| {
+                let bytes = ex.encode();
+                OpaqueExtrinsic::from_bytes(bytes.as_slice()).ok()
+            })
+            .collect();
+        
+        rt.extrinsic_filter(block_hash, extrinsics).map_err(|e| {
             error!("Failed to filter extrinsics. Substrate block hash: {block_hash}, error: {e}");
             StarknetRpcApiError::FailedToFetchPendingTransactions
         })

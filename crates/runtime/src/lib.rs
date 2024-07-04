@@ -44,7 +44,7 @@ pub use pallet_starknet;
 use pallet_starknet::Call::{consume_l1_message, declare, deploy_account, invoke};
 pub use pallet_starknet::DefaultChainId;
 pub use pallet_timestamp::Call as TimestampCall;
-use sp_api::impl_runtime_apis;
+use sp_api::{impl_runtime_apis};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::KeyTypeId;
 use sp_core::OpaqueMetadata;
@@ -52,7 +52,7 @@ use sp_runtime::traits::{BlakeTwo256, Block as BlockT, NumberFor};
 use sp_runtime::transaction_validity::{TransactionSource, TransactionValidity};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-use sp_runtime::{generic, ApplyExtrinsicResult};
+use sp_runtime::{generic, ApplyExtrinsicResult, OpaqueExtrinsic};
 pub use sp_runtime::{Perbill, Permill};
 use sp_std::prelude::*;
 use sp_version::RuntimeVersion;
@@ -64,6 +64,13 @@ use starknet_api::transaction::{Calldata, Event as StarknetEvent, MessageToL1, T
 pub use types::*;
 // For `format!`
 extern crate alloc;
+
+use pallet_starknet_runtime_api::{RuntimeArg, RuntimeRet};
+use parity_scale_codec::{
+    Encode,
+    Decode,
+    // Error as ScaleError
+};
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
@@ -288,6 +295,7 @@ impl_runtime_apis! {
         }
 
         fn estimate_message_fee(message: L1HandlerTransaction) -> Result<Result<FeeEstimate, SimulationError>, InternalSubstrateError> {
+            println!("[estimate_message_fee] {} {}", file!(), line!());
             Starknet::estimate_message_fee(message)
         }
 
@@ -302,20 +310,40 @@ impl_runtime_apis! {
         fn simulate_message(message: L1HandlerTransaction, simulation_flags: SimulationFlags) -> Result<Result<TransactionExecutionInfo, SimulationError>, InternalSubstrateError> {
             Starknet::simulate_message(message, &simulation_flags)
         }
+        
+        // fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction> {
+        fn extrinsic_filter(xts: Vec<OpaqueExtrinsic>) -> Vec<Transaction> {
 
-        fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction> {
-            xts.into_iter().filter_map(|xt| match xt.function {
-                RuntimeCall::Starknet( invoke { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::Invoke(transaction))),
-                RuntimeCall::Starknet( declare { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::Declare(transaction))),
-                RuntimeCall::Starknet( deploy_account { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::DeployAccount(transaction))),
-                RuntimeCall::Starknet( consume_l1_message { transaction }) => Some(Transaction::L1HandlerTransaction(transaction)),
-                _ => None,
-            }).collect::<Vec<Transaction>>()
+            xts
+                .into_iter()
+                .filter_map(|xt| {
+
+                    let Ok(xt_) = UncheckedExtrinsic::decode(&mut xt.encode().as_slice()) else { return None; };
+
+                    match xt_.function {
+                        RuntimeCall::Starknet( invoke { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::Invoke(transaction))),
+                        RuntimeCall::Starknet( declare { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::Declare(transaction))),
+                        RuntimeCall::Starknet( deploy_account { transaction }) => Some(Transaction::AccountTransaction(AccountTransaction::DeployAccount(transaction))),
+                        RuntimeCall::Starknet( consume_l1_message { transaction }) => Some(Transaction::L1HandlerTransaction(transaction)),
+                        _ => None,
+                    }
+                })
+                .collect::<Vec<Transaction>>()
         }
 
-        fn get_index_and_tx_for_tx_hash(extrinsics: Vec<<Block as BlockT>::Extrinsic>, tx_hash: TransactionHash) -> Option<(u32, Transaction)> {
+        fn get_index_and_tx_for_tx_hash(extrinsics: Vec<OpaqueExtrinsic>, tx_hash: TransactionHash) -> Option<(u32, Transaction)> {
+
+            let extrinsics_: Vec<<Block as BlockT>::Extrinsic> = extrinsics
+                .into_iter()
+                .filter_map(|ex| {
+                    Some(UncheckedExtrinsic::decode(&mut ex.encode().as_slice()))
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .ok()?;
+
             // Find our tx and it's index
-            let (tx_index, tx) =  extrinsics.into_iter().enumerate().find(|(_, xt)| {
+            let (tx_index, tx) =  extrinsics_.into_iter().enumerate().find(|(_, xt)| {
+
                 let computed_tx_hash = match &xt.function {
                     RuntimeCall::Starknet( invoke { transaction }) => transaction.tx_hash,
                     RuntimeCall::Starknet( declare { transaction, .. }) => transaction.tx_hash,
@@ -364,7 +392,7 @@ impl_runtime_apis! {
     }
 
     impl pallet_starknet_runtime_api::ConvertTransactionRuntimeApi<Block> for Runtime {
-        fn convert_account_transaction(transaction: AccountTransaction) -> UncheckedExtrinsic {
+        fn convert_account_transaction(transaction: AccountTransaction) -> OpaqueExtrinsic {
             let call = match transaction {
                 AccountTransaction::Declare(tx) => {
                     pallet_starknet::Call::declare { transaction: tx }
@@ -377,13 +405,17 @@ impl_runtime_apis! {
                 }
             };
 
-            UncheckedExtrinsic::new_unsigned(call.into())
+            let ex = UncheckedExtrinsic::new_unsigned(call.into());
+            let ex_bytes = ex.encode();
+            OpaqueExtrinsic::from_bytes(ex_bytes.as_slice()).unwrap()
         }
 
-        fn convert_l1_transaction(transaction: L1HandlerTransaction) -> UncheckedExtrinsic {
+        fn convert_l1_transaction(transaction: L1HandlerTransaction) -> OpaqueExtrinsic {
             let call =  pallet_starknet::Call::<Runtime>::consume_l1_message { transaction };
+            let ex = UncheckedExtrinsic::new_unsigned(call.into());
 
-            UncheckedExtrinsic::new_unsigned(call.into())
+            let ex_bytes = ex.encode();
+            OpaqueExtrinsic::from_bytes(ex_bytes.as_slice()).unwrap()
         }
 
     }

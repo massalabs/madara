@@ -23,3 +23,4 @@ starknet_api = { workspace = true }
 
 # Substrate
 sp-api = { workspace = true }
+sp-runtime = { workspace = true }

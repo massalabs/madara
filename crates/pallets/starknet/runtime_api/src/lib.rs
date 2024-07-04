@@ -21,13 +21,19 @@ use mp_simulations::{
     TransactionSimulationResult,
 };
 use mp_starknet_inherent::L1GasPrices;
-use sp_api::BlockT;
+use sp_api::{BlockT, Decode};
+use sp_api::codec::{Error, Input};
+use sp_api::scale_info::Type;
+use sp_runtime::generic::UncheckedExtrinsic;
 use starknet_api::core::{ClassHash, ContractAddress, EntryPointSelector, Nonce};
 use starknet_api::hash::StarkFelt;
 use starknet_api::state::StorageKey;
 use starknet_api::transaction::{Calldata, Event as StarknetEvent, MessageToL1, TransactionHash};
 
-sp_api::decl_runtime_apis! {
+use sp_runtime::OpaqueExtrinsic;
+use sp_runtime::scale_info::TypeInfo;
+
+sp_api::decl_runtime_apis_native! {
     pub trait StarknetRuntimeApi {
         /// Returns the nonce associated with the given address in the given block
         fn nonce(contract_address: ContractAddress) -> Nonce;
@@ -61,7 +67,8 @@ sp_api::decl_runtime_apis! {
         /// this limitation. The solution is to offload decoding and filtering to the RuntimeApi in
         /// the runtime itself, accomplished through the extrinsic_filter method. This enables the
         /// client to operate seamlessly while abstracting the extrinsic complexity.
-        fn extrinsic_filter(xts: Vec<<Block as BlockT>::Extrinsic>) -> Vec<Transaction>;
+        fn extrinsic_filter(xts: Vec<OpaqueExtrinsic>) -> Vec<Transaction>;
+
         /// Used to re-execute transactions from a past block and return their trace
         ///
         /// # Arguments
@@ -77,7 +84,7 @@ sp_api::decl_runtime_apis! {
 
         fn get_transaction_re_execution_state_diff(transactions_before: Vec<Transaction>, transactions: Vec<Transaction>) -> Result<Result<CommitmentStateDiff, SimulationError>, InternalSubstrateError>;
 
-        fn get_index_and_tx_for_tx_hash(xts: Vec<<Block as BlockT>::Extrinsic>, tx_hash: TransactionHash) -> Option<(u32, Transaction)>;
+        fn get_index_and_tx_for_tx_hash(xts: Vec<OpaqueExtrinsic>, tx_hash: TransactionHash) -> Option<(u32, Transaction)>;
 
         fn get_events_for_tx_by_hash(tx_hash: TransactionHash) -> Vec<StarknetEvent>;
         /// Return the outcome of the tx execution
@@ -96,10 +103,10 @@ sp_api::decl_runtime_apis! {
 
     pub trait ConvertTransactionRuntimeApi {
         /// Converts the transaction to an UncheckedExtrinsic for submission to the pool.
-        fn convert_account_transaction(transaction: AccountTransaction) -> <Block as BlockT>::Extrinsic;
+        fn convert_account_transaction(transaction: AccountTransaction) -> OpaqueExtrinsic;
 
         /// Converts the L1 Message transaction to an UncheckedExtrinsic for submission to the pool.
-        fn convert_l1_transaction(transaction: L1HandlerTransaction) -> <Block as BlockT>::Extrinsic;
+        fn convert_l1_transaction(transaction: L1HandlerTransaction) -> OpaqueExtrinsic;
     }
 
 }

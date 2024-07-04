@@ -8,7 +8,8 @@ use mp_transactions::compute_hash::ComputeTransactionHash;
 use pallet_starknet_runtime_api::{ConvertTransactionRuntimeApi, StarknetRuntimeApi};
 use sc_client_api::HeaderBackend;
 use sc_transaction_pool_api::{TransactionPool, TransactionSource};
-use sp_api::ProvideRuntimeApi;
+use sp_api::{Decode, Encode, ProvideRuntimeApi};
+// use sp_runtime::generic::UncheckedExtrinsic;
 use sp_runtime::traits::Block as BlockT;
 use starknet_api::transaction::Fee;
 use starknet_core_contract_client::interfaces::{LogMessageToL2Filter, StarknetMessagingEvents};
@@ -149,10 +150,11 @@ where
     let tx_hash = tx.compute_hash(chain_id, false);
     let transaction = L1HandlerTransaction { tx, tx_hash, paid_fee_on_l1 };
 
-    let extrinsic = client.runtime_api().convert_l1_transaction(best_block_hash, transaction).map_err(|e| {
+    let opaque_extrinsic = client.runtime_api().convert_l1_transaction(best_block_hash, transaction).map_err(|e| {
         log::error!("⟠ Failed to convert L1 Transaction via Runtime Api: {:?}", e);
         L1MessagesWorkerError::ConvertTransactionRuntimeApiError(e)
     })?;
+    let extrinsic= <B::Extrinsic>::decode(&mut opaque_extrinsic.encode().as_slice()).unwrap();
 
     let tx_hash = pool.submit_one(best_block_hash, TransactionSource::External, extrinsic).await.map_err(|e| {
         log::error!("⟠ Failed to submit transaction with L1 Message: {:?}", e);
