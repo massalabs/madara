@@ -1,7 +1,6 @@
 # Genesis
 
-The genesis of the chain can be found in the [configs]
-(<https://github.com/keep-starknet-strange/madara/tree/main/configs/genesis-assets>)
+The genesis of the chain can be found in the [configs](<https://github.com/keep-starknet-strange/madara/tree/main/configs/genesis-assets>)
 folder. The genesis is defined in the form of a JSON file containing the
 following:
 
