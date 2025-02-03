@@ -10,11 +10,11 @@
 <!-- markdownlint-restore -->
 
 [![Project license](https://img.shields.io/github/license/keep-starknet-strange/madara.svg?style=flat-square)](LICENSE)
-[![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/keep-starknet-strange/madara/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
-<a href="https://twitter.com/MadaraStarknet">
+[![Pull Requests welcome](https://img.shields.io/badge/PRs-welcome-ff69b4.svg?style=flat-square)](https://github.com/massalabs/madara/issues)
+<a href="https://x.com/MadaraStarknet">
 <img src="https://img.shields.io/twitter/follow/MadaraStarknet?style=social"/>
-</a> <a href="https://github.com/keep-starknet-strange/madara">
-<img src="https://img.shields.io/github/stars/keep-starknet-strange/madara?style=social"/>
+</a> <a href="https://github.com/massalabs/madara/stargazers">
+<img src="https://img.shields.io/github/stars/massalabs/madara?style=social"/>
 </a> <a href="https://docs.madara.zone/">
 <img src="https://img.shields.io/badge/Documentation-Website-yellow"/> </a>
 
